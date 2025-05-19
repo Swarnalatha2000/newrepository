@@ -1,0 +1,37 @@
+import boto3
+import json
+import os
+import uuid
+ 
+# Initialize AWS clients
+polly = boto3.client("polly")
+s3 = boto3.client("s3")
+ 
+BUCKET_NAME = "pollydemots"
+ 
+def lambda_handler(event, context):
+    try:
+        # Parse request
+        body = json.loads(event["body"])
+        text = body.get("text", "Hello, this is a default response")
+        # Generate speech using Polly
+        response = polly.synthesize_speech(Text=text, OutputFormat="mp3", VoiceId="Joanna")
+        print("getting the reponse", response)
+        # Create a unique file name
+        file_name = f"speech-{uuid.uuid4().hex}.mp3"
+        file_path = f"/tmp/{file_name}"
+ 
+        # Save the audio file
+        with open(file_path, "wb") as f:
+            f.write(response["AudioStream"].read())
+ 
+        # Upload the file to S3
+        s3.upload_file(file_path, BUCKET_NAME, file_name)
+        s3_url = f"https://{BUCKET_NAME}.s3.amazonaws.com/{file_name}"
+ 
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"message": "Speech generated", "url": s3_url}),
+        }
+    except Exception as e:
+        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
